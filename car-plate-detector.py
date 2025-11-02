@@ -7,6 +7,7 @@ from torchvision.io import decode_image
 import torch
 import pandas as pd
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.utils.data import DataLoader, Dataset, random_split
 import matplotlib.pyplot as plt
 
@@ -113,18 +114,26 @@ training_data, validation_data, test_data = random_split(
 	[training_size, validation_size, test_size]
 	)
 
+
 train_loader = DataLoader(training_data, batch_size = 32, shuffle = True, num_workers = 16)
 validation_loader = DataLoader(validation_data, batch_size = 32, shuffle = False, num_workers = 16)
 test_loader = DataLoader(test_data, batch_size = 32, shuffle = False, num_workers = 16)
 
 
-train_features, train_labels = next(iter(train_loader))
 
-img = train_features[0].squeeze()
-label = train_labels[0]
+class Model(nn.Module):
+	
+	def __init__(self, input_features, hidden1 = 8, hidden2 = 8, output_layer = 4):
+		super().__init__()
+		self.hidden_layer1 = nn.Linear(input_features, hidden1)
+		self.hidden_layer2 = nn.Linear(hidden1, hidden2)
+		self.output_layer = nn.Linear(hidden2, output_layer)
 
-plt.imshow(img, cmap='gray')
-plt.show()
-print(label)
+	def forward(self, x):
+		x = F.relu(self.hidden1(x))
+		x = F.relu(self.hidden2(x))
+		x = F.sigmoid(self.output_layer(x))
 
+
+		return x
 
