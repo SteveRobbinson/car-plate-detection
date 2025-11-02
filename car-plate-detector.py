@@ -7,9 +7,8 @@ from torchvision.io import decode_image
 import torch
 import pandas as pd
 import torch.nn as nn
-import torch.optim as optim
-from torch.utils.data import DataLoader, TensorDataset, Dataset
-
+from torch.utils.data import DataLoader, Dataset, random_split
+import matplotlib.pyplot as plt
 
 annotationsdir = '/home/lukas/Desktop/car-plate-dataset/annotations'
 imagedir = '/home/lukas/Desktop/car-plate-dataset/images'
@@ -53,7 +52,7 @@ def parse_data(rootdir):
 		return all_annotations
 
 annotations = parse_data(annotationsdir)
-print(annotations)
+annotations = annotations.explode('coordinates')
 
 
 
@@ -68,8 +67,8 @@ transforms = v2.Compose([
 
 class CustomImageDataset(Dataset):
 
-	def __init__(self, annotations, img_dir, transform = None, target_transform = None):
-		self.image_labels = annotations
+	def __init__(self, annotations_file, img_dir, transform = None, target_transform = None):
+		self.image_labels = annotations_file
 		self.img_dir = img_dir
 		self.transform = transform 
 		self.target_transform = target_transform
@@ -82,14 +81,50 @@ class CustomImageDataset(Dataset):
 	def __getitem__(self, idx):
 		sample = self.image_labels.iloc[idx]
 		img_path = os.path.join(self.img_dir, sample['filename'])
-		image = decode_image(img_path)
+		img = Image.open(img_path).convert('RGB')
 		label = sample['coordinates']
 
+
 		if self.transform:
-			image = self.transform(image)
+			image = self.transform(img)
 
 		if self.target_transform:
 			label = self.target_transform(label)
 
 		return image, label
+
+
+
+full_dataset = CustomImageDataset(
+	annotations_file = annotations,
+	img_dir = imagedir,
+	transform = transforms
+	)
+
+
+total_size = len(full_dataset)
+training_size = int(total_size * 0.7)
+validation_size = int(total_size * 0.15)
+test_size = total_size - (training_size + validation_size)
+
+
+training_data, validation_data, test_data = random_split(
+	full_dataset,
+	[training_size, validation_size, test_size]
+	)
+
+train_loader = DataLoader(training_data, batch_size = 32, shuffle = True, num_workers = 16)
+validation_loader = DataLoader(validation_data, batch_size = 32, shuffle = False, num_workers = 16)
+test_loader = DataLoader(test_data, batch_size = 32, shuffle = False, num_workers = 16)
+
+
+train_features, train_labels = next(iter(train_loader))
+
+img = train_features[0].squeeze()
+label = train_labels[0]
+
+plt.imshow(img, cmap='gray')
+plt.show()
+print(label)
+
 
