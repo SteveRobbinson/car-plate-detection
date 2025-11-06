@@ -7,9 +7,11 @@ from torchvision.io import decode_image
 import torch
 import pandas as pd
 import torch.nn as nn
+from torch.optim import Adam
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, Dataset, random_split
 import matplotlib.pyplot as plt
+from torchvision.ops import generalized_box_iou_loss
 
 annotationsdir = '/home/lukas/Desktop/car-plate-dataset/annotations'
 imagedir = '/home/lukas/Desktop/car-plate-dataset/images'
@@ -47,13 +49,15 @@ def parse_data(rootdir):
 				'filename' : root.find('filename').text,
 				'coordinates' : coords
 				})
-			# all_annotations[root.find('filename').text] = coords
+
 			all_annotations = pd.DataFrame(data)
 
 		return all_annotations
 
+
 annotations = parse_data(annotationsdir)
 annotations = annotations.explode('coordinates')
+print(annotations)
 
 
 
@@ -121,7 +125,7 @@ test_loader = DataLoader(test_data, batch_size = 32, shuffle = False, num_worker
 
 
 
-class Model(nn.Module):
+class CarPlateDetector(nn.Module):
 	
 	def __init__(self, input_features, hidden1 = 8, hidden2 = 8, output_layer = 4):
 		super().__init__()
@@ -130,10 +134,69 @@ class Model(nn.Module):
 		self.output_layer = nn.Linear(hidden2, output_layer)
 
 	def forward(self, x):
-		x = F.relu(self.hidden1(x))
-		x = F.relu(self.hidden2(x))
+		x = F.relu(self.hidden_layer1(x))
+		x = F.relu(self.hidden_layer2(x))
 		x = F.sigmoid(self.output_layer(x))
 
 
 		return x
+
+
+
+test = CarPlateDetector(640).to(device)
+optimizer = torch.optim.Adam(test.parameters())
+
+
+def train_one_epoch(epoch_index):
+    running_loss = 0
+
+    for i, data in enumerate(train_loader):
+        input, label_data = data
+
+        label = torch.stack(label_data)
+        optimizer.zero_grad()
+
+        y_hat = test(input)
+
+        loss = generalized_box_iou_loss(label, y_hat).diag()
+        loss = loss.mean()
+        loss.backwards()
+
+        optimizer.step()
+
+        running_loss += loss.item()
+    
+    avg_loss = running_loss / len(train_loader)
+
+    return avg_loss
+
+
+
+epochs = 5
+
+for i in range(epochs):
+    print(f"Epoch nr.{i + 1}")
+
+    test.train(True)
+    avg_loss = train_one_epoch(i)
+    
+    running_vloss = 0
+    test.eval()
+
+    with torch.no_grad():
+        for j, data in enumerate(validation_loader):
+            vinput, vlabel_data = data
+            vlabel = torch.stack(vlabel_data)
+            vyhat = model(vinput)
+            vloss = generalized_box_iou_loss(vlabel, vyhat).diag()
+            vloss = vloss.mean()
+            running_vloss += vloss.item()
+
+    avg_vloss = running_vloss / len(validation_loader)
+
+    print(f"Training loss: {avg_loss}, Validation loss: {avg_vloss}")
+
+
+
+
 
