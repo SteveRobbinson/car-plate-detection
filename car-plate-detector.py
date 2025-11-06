@@ -62,7 +62,7 @@ print(annotations)
 
 
 transforms = v2.Compose([
-	v2.Resize((640, 640)),
+	v2.Resize((320, 320)),
     v2.ColorJitter(brightness=0.2, contrast=0.2),
     v2.ToImage(),
     v2.ToDtype(torch.float32, scale=True)
@@ -86,7 +86,7 @@ class CustomImageDataset(Dataset):
 	def __getitem__(self, idx):
 		sample = self.image_labels.iloc[idx]
 		img_path = os.path.join(self.img_dir, sample['filename'])
-		img = Image.open(img_path).convert('RGB')
+		img = Image.open(img_path).convert('L')
 		label = sample['coordinates']
 
 
@@ -127,23 +127,55 @@ test_loader = DataLoader(test_data, batch_size = 32, shuffle = False, num_worker
 
 class CarPlateDetector(nn.Module):
 	
-	def __init__(self, input_features, hidden1 = 8, hidden2 = 8, output_layer = 4):
+	def __init__(self):
 		super().__init__()
-		self.hidden_layer1 = nn.Linear(input_features, hidden1)
-		self.hidden_layer2 = nn.Linear(hidden1, hidden2)
-		self.output_layer = nn.Linear(hidden2, output_layer)
+		self.hidden_layer1 = nn.Conv2d(1, 32, kernel_size=3, padding=1)
+        self.hidden_layer2 = nn.MaxPool2d(2)
+		
+        self.hidden_layer3 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
+        self.hidden_layer4 = nn.MaxPool2d(2)
+     	
+        self.hidden_layer5 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
+        self.hidden_layer6 = nn.MaxPool2d(2)
+      	
+        self.hidden_layer7 = nn.Conv2d(128, 256, kernel_size=3, padding=1)
+        self.hidden_layer8 = nn.MaxPool2d(2)
+        
+        self.hidden_layer9 = nn.Conv2d(256, 512, kernel_size=3, padding=1)
+        self.hidden_layer10 = nn.MaxPool2d(2)
+        
+        self.hidden_layer11 = nn.Flatten()
+        self.hidden_layer12 = nn.Linear(51200, 512)
+        
+        self,output_layer = nn.Linear(512, 4)
+
 
 	def forward(self, x):
 		x = F.relu(self.hidden_layer1(x))
-		x = F.relu(self.hidden_layer2(x))
-		x = F.sigmoid(self.output_layer(x))
+		x = self.hidden_layer2(x)
+	    
+        x = F.relu(self.hidden_layer3(x))
+		x = self.hidden_layer4(x)
+	    
+        x = F.relu(self.hidden_layer5(x))
+		x = self.hidden_layer6(x)
+        
+        x = F.relu(self.hidden_layer7(x))
+		x = self.hidden_layer8(x)
+        
+        x = F.relu(self.hidden_layer9(x))
+		x = self.hidden_layer10(x)
 
+        x = self.hidden_layer11(x)
+        x = F.relu(self.hidden_layer12(x)) 
+        
+        x = self.output_layer(x)
 
 		return x
 
 
 
-test = CarPlateDetector(640).to(device)
+test = CarPlateDetector(1).to(device)
 optimizer = torch.optim.Adam(test.parameters())
 
 
