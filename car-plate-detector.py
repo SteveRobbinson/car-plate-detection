@@ -1,10 +1,12 @@
 import numpy as np
 import xml.etree.ElementTree as ET 
+from lxml import etree
 import os
 from PIL import Image
 from torchvision.transforms import v2
 from torchvision.io import decode_image
 import torch
+from pathlib import Path
 import pandas as pd
 import torch.nn as nn
 from torch.optim import Adam
@@ -13,50 +15,38 @@ from torch.utils.data import DataLoader, Dataset, random_split
 import matplotlib.pyplot as plt
 from torchvision.ops import generalized_box_iou_loss
 
-annotationsdir = '/home/lukas/Desktop/car-plate-dataset/annotations'
-imagedir = '/home/lukas/Desktop/car-plate-dataset/images'
-
+annotationsdir = Path('/home/lukas/Desktop/car-plate-dataset/annotations')
+imagedir = Path('/home/lukas/Desktop/car-plate-dataset/images')
 
 
 def parse_data(rootdir):
+    
+    query = '//bndbox'
+    data = []
+    broken_data = []
 
-	data = []
+    for child in rootdir.iterdir():
+        tree = etree.parse(child)
+        bndbox_list = tree.xpath(query)
 
-	for dirpath, _, filenames in os.walk(rootdir):
+        for elements in bndbox_list:
+            
+            coordinates = elements.xpath('*/text()')
+            
+            if len(coordinates) < 4:
+                broken_data.append(child.name)
+                continue
 
-		for file_name in filenames:
+            data.append({
+                'file_name': child.name,
+                'coordinates' : [int(x) for x in coordinates]
+                })
 
-			coords = []
-			full_path = os.path.join(dirpath, file_name)
-			tree = ET.parse(full_path)
-			root = tree.getroot()
-			all_objects = root.findall('object')
+    data = pd.DataFrame(data)
 
-			for object in all_objects:
-
-				bndbox = object.find('bndbox')
-
-				if bndbox is not None:
-
-					xmin = int(bndbox.find('xmin').text)
-					ymin = int(bndbox.find('ymin').text)
-					xmax = int(bndbox.find('xmax').text)
-					ymax = int(bndbox.find('ymax').text)
-
-					coords.append([xmin, ymin, xmax, ymax])
-
-			data.append({
-				'filename' : root.find('filename').text,
-				'coordinates' : coords
-				})
-
-			all_annotations = pd.DataFrame(data)
-
-		return all_annotations
-
+    return data
 
 annotations = parse_data(annotationsdir)
-annotations = annotations.explode('coordinates')
 print(annotations)
 
 
@@ -126,56 +116,54 @@ test_loader = DataLoader(test_data, batch_size = 32, shuffle = False, num_worker
 
 
 class CarPlateDetector(nn.Module):
-	
-	def __init__(self):
-		super().__init__()
-		self.hidden_layer1 = nn.Conv2d(1, 32, kernel_size=3, padding=1)
+
+    def __init__(self):
+        super().__init__()
+        self.hidden_layer1 = nn.Conv2d(1, 32, kernel_size=3, padding=1)
         self.hidden_layer2 = nn.MaxPool2d(2)
-		
+        
         self.hidden_layer3 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
         self.hidden_layer4 = nn.MaxPool2d(2)
-     	
+        
         self.hidden_layer5 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
         self.hidden_layer6 = nn.MaxPool2d(2)
-      	
+        
         self.hidden_layer7 = nn.Conv2d(128, 256, kernel_size=3, padding=1)
         self.hidden_layer8 = nn.MaxPool2d(2)
-        
+    
         self.hidden_layer9 = nn.Conv2d(256, 512, kernel_size=3, padding=1)
         self.hidden_layer10 = nn.MaxPool2d(2)
         
         self.hidden_layer11 = nn.Flatten()
         self.hidden_layer12 = nn.Linear(51200, 512)
         
-        self,output_layer = nn.Linear(512, 4)
+        self.output_layer = nn.Linear(512, 4)
 
+    def forward(self, x):
 
-	def forward(self, x):
-		x = F.relu(self.hidden_layer1(x))
-		x = self.hidden_layer2(x)
-	    
+        x = F.relu(self.hidden_layer1(x))
+        x = self.hidden_layer2(x)
+        
         x = F.relu(self.hidden_layer3(x))
-		x = self.hidden_layer4(x)
+        x = self.hidden_layer4(x)
 	    
         x = F.relu(self.hidden_layer5(x))
-		x = self.hidden_layer6(x)
+        x = self.hidden_layer6(x)
         
         x = F.relu(self.hidden_layer7(x))
-		x = self.hidden_layer8(x)
+        x = self.hidden_layer8(x)
         
         x = F.relu(self.hidden_layer9(x))
-		x = self.hidden_layer10(x)
+        x = self.hidden_layer10(x)
 
         x = self.hidden_layer11(x)
         x = F.relu(self.hidden_layer12(x)) 
         
         x = self.output_layer(x)
 
-		return x
+        return x
 
-
-
-test = CarPlateDetector(1).to(device)
+test = CarPlateDetector().to(device)
 optimizer = torch.optim.Adam(test.parameters())
 
 
@@ -227,6 +215,7 @@ for i in range(epochs):
     avg_vloss = running_vloss / len(validation_loader)
 
     print(f"Training loss: {avg_loss}, Validation loss: {avg_vloss}")
+
 
 
 
