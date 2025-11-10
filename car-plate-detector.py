@@ -1,18 +1,13 @@
-import numpy as np
-import xml.etree.ElementTree as ET 
 from lxml import etree
 import os
 from PIL import Image
 from torchvision.transforms import v2
-from torchvision.io import decode_image
 import torch
 from pathlib import Path
 import pandas as pd
 import torch.nn as nn
-from torch.optim import Adam
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, Dataset, random_split
-import matplotlib.pyplot as plt
 from torchvision.ops import generalized_box_iou_loss
 
 annotationsdir = Path('/home/lukas/Desktop/car-plate-dataset/annotations')
@@ -47,8 +42,6 @@ def parse_data(rootdir):
     return data
 
 annotations = parse_data(annotationsdir)
-print(annotations)
-
 
 
 transforms = v2.Compose([
@@ -119,52 +112,32 @@ class CarPlateDetector(nn.Module):
 
     def __init__(self):
         super().__init__()
-        self.hidden_layer1 = nn.Conv2d(1, 32, kernel_size=3, padding=1)
-        self.hidden_layer2 = nn.MaxPool2d(2)
+        self.features = nn.Sequential(
+            nn.Conv2d(3, 32, 3, padding=1), nn.ReLU(), nn.MaxPool2d(2,2),
+            nn.Conv2d(32, 64, 3, padding=1), nn.ReLU(), nn.MaxPool2d(2,2),
+            nn.Conv2d(64, 128, 3, padding=1), nn.ReLU(), nn.MaxPool2d(2,2),
+            nn.Conv2d(128, 256, 3, padding=1), nn.ReLU(), nn.MaxPool2d(2,2),
+            nn.Conv2d(256, 512, 3, padding=1), nn.ReLU(), nn.MaxPool2d(2,2)
+        )
         
-        self.hidden_layer3 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
-        self.hidden_layer4 = nn.MaxPool2d(2)
-        
-        self.hidden_layer5 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
-        self.hidden_layer6 = nn.MaxPool2d(2)
-        
-        self.hidden_layer7 = nn.Conv2d(128, 256, kernel_size=3, padding=1)
-        self.hidden_layer8 = nn.MaxPool2d(2)
-    
-        self.hidden_layer9 = nn.Conv2d(256, 512, kernel_size=3, padding=1)
-        self.hidden_layer10 = nn.MaxPool2d(2)
-        
-        self.hidden_layer11 = nn.Flatten()
-        self.hidden_layer12 = nn.Linear(51200, 512)
-        
-        self.output_layer = nn.Linear(512, 4)
+        self.gap = nn.AdaptiveAvgPool2d((1,1))
+        self.fc = nn.Linear(512, 4)
+        self.sigmoid = nn.Sigmoid()
+
 
     def forward(self, x):
-
-        x = F.relu(self.hidden_layer1(x))
-        x = self.hidden_layer2(x)
-        
-        x = F.relu(self.hidden_layer3(x))
-        x = self.hidden_layer4(x)
-	    
-        x = F.relu(self.hidden_layer5(x))
-        x = self.hidden_layer6(x)
-        
-        x = F.relu(self.hidden_layer7(x))
-        x = self.hidden_layer8(x)
-        
-        x = F.relu(self.hidden_layer9(x))
-        x = self.hidden_layer10(x)
-
-        x = self.hidden_layer11(x)
-        x = F.relu(self.hidden_layer12(x)) 
-        
-        x = self.output_layer(x)
+        x = self.features(x)
+        x = self.gap(x)
+        x = torch.flatten(x, 1)
+        x = self.sigmoid(self.fc(x))
 
         return x
 
-test = CarPlateDetector().to(device)
-optimizer = torch.optim.Adam(test.parameters())
+
+device = torch.accelerator.current_accelerator().type if torch.accelerator.is_available() else 'cpu'
+print(device)
+model = CarPlateDetector().to(device)
+optimizer = torch.optim.Adam(model.parameters())
 
 
 def train_one_epoch(epoch_index):
@@ -176,7 +149,7 @@ def train_one_epoch(epoch_index):
         label = torch.stack(label_data)
         optimizer.zero_grad()
 
-        y_hat = test(input)
+        y_hat = model(input)
 
         loss = generalized_box_iou_loss(label, y_hat).diag()
         loss = loss.mean()
@@ -197,11 +170,11 @@ epochs = 5
 for i in range(epochs):
     print(f"Epoch nr.{i + 1}")
 
-    test.train(True)
+    model.train(True)
     avg_loss = train_one_epoch(i)
     
     running_vloss = 0
-    test.eval()
+    model.eval()
 
     with torch.no_grad():
         for j, data in enumerate(validation_loader):
