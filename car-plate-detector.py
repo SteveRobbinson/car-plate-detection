@@ -77,7 +77,7 @@ class CustomImageDataset(Dataset):
 		if self.target_transform:
 			label = self.target_transform(label)
 
-		return image, label
+		return image, torch.tensor(label)
 
 
 
@@ -105,13 +105,12 @@ validation_loader = DataLoader(validation_data, batch_size = 32, shuffle = False
 test_loader = DataLoader(test_data, batch_size = 32, shuffle = False, num_workers = 16)
 
 
-
 class CarPlateDetector(nn.Module):
 
     def __init__(self):
         super().__init__()
         self.features = nn.Sequential(
-            nn.Conv2d(3, 32, 3, padding=1), nn.ReLU(), nn.MaxPool2d(2,2),
+            nn.Conv2d(1, 32, 3, padding=1), nn.ReLU(), nn.MaxPool2d(2,2),
             nn.Conv2d(32, 64, 3, padding=1), nn.ReLU(), nn.MaxPool2d(2,2),
             nn.Conv2d(64, 128, 3, padding=1), nn.ReLU(), nn.MaxPool2d(2,2),
             nn.Conv2d(128, 256, 3, padding=1), nn.ReLU(), nn.MaxPool2d(2,2),
@@ -138,29 +137,28 @@ model = CarPlateDetector().to(device)
 optimizer = torch.optim.Adam(model.parameters())
 
 
-def train_one_epoch(epoch_index):
+def train_one_epoch():
     running_loss = 0
 
-    for i, data in enumerate(train_loader):
-        input, label_data = data
+    for data in iter(train_loader):
+        input, label = data
 
-        label = torch.stack(label_data)
         optimizer.zero_grad()
 
         y_hat = model(input)
 
-        loss = generalized_box_iou_loss(label, y_hat).diag()
-        loss = loss.mean()
-        loss.backwards()
+        loss = generalized_box_iou_loss(label, y_hat).mean()
+        loss.backward()
 
         optimizer.step()
 
         running_loss += loss.item()
-    
+
+
     avg_loss = running_loss / len(train_loader)
 
-    return avg_loss
 
+    return avg_loss
 
 
 epochs = 5
