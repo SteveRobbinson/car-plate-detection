@@ -1,12 +1,10 @@
 from lxml import etree
-import os
 from PIL import Image
 from torchvision.transforms import v2
 import torch
 from pathlib import Path
 import pandas as pd
 import torch.nn as nn
-import torch.nn.functional as F
 from torch.utils.data import DataLoader, Dataset, random_split
 from torchvision.ops import generalized_box_iou_loss
 
@@ -33,7 +31,7 @@ def parse_data(rootdir):
                 continue
 
             data.append({
-                'file_name': child.name,
+                'file_name': child.stem + '.png',
                 'coordinates' : [int(x) for x in coordinates]
                 })
 
@@ -68,7 +66,7 @@ class CustomImageDataset(Dataset):
 
 	def __getitem__(self, idx):
 		sample = self.image_labels.iloc[idx]
-		img_path = os.path.join(self.img_dir, sample['filename'])
+		img_path = self.img_dir / sample['file_name']
 		img = Image.open(img_path).convert('L')
 		label = sample['coordinates']
 
