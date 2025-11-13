@@ -167,7 +167,7 @@ for i in range(epochs):
     print(f"Epoch nr.{i + 1}")
 
     model.train(True)
-    avg_loss = train_one_epoch(i)
+    avg_loss = train_one_epoch()
     
     running_vloss = 0
     model.eval()
@@ -175,16 +175,14 @@ for i in range(epochs):
     with torch.no_grad():
         for j, data in enumerate(validation_loader):
             vinput, vlabel_data = data
-            vlabel = torch.stack(vlabel_data)
             vyhat = model(vinput)
-            vloss = generalized_box_iou_loss(vlabel, vyhat).diag()
-            vloss = vloss.mean()
+            vloss = generalized_box_iou_loss(vlabel_data, vyhat).mean()
             running_vloss += vloss.item()
 
     avg_vloss = running_vloss / len(validation_loader)
 
     print(f"Training loss: {avg_loss}, Validation loss: {avg_vloss}")
-
+##
 
 
 
