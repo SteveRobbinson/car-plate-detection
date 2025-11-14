@@ -67,12 +67,12 @@ class CustomImageDataset(Dataset):
 	def __getitem__(self, idx):
 		sample = self.image_labels.iloc[idx]
 		img_path = self.img_dir / sample['file_name']
-		img = Image.open(img_path).convert('L')
+		image = Image.open(img_path).convert('L')
 		label = sample['coordinates']
 
 
 		if self.transform:
-			image = self.transform(img)
+			image = self.transform(image)
 
 		if self.target_transform:
 			label = self.target_transform(label)
@@ -182,7 +182,24 @@ for i in range(epochs):
     avg_vloss = running_vloss / len(validation_loader)
 
     print(f"Training loss: {avg_loss}, Validation loss: {avg_vloss}")
-##
+
+
+
+class ConvolutionalLayer(nn.Module):
+    def __init__(self, in_channels, out_channels, kernel_size, stride, padding):
+        super().__init__()
+
+        self.features = nn.Sequential(
+        nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding),
+        nn.BatchNorm2d(out_channels),
+        nn.SiLU()
+        )
+
+        def forward(self, x):
+            x = self.features(x)
+
+            return x
+            
 
 
 
