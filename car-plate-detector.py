@@ -190,16 +190,37 @@ class ConvolutionalLayer(nn.Module):
         super().__init__()
 
         self.features = nn.Sequential(
-        nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding),
-        nn.BatchNorm2d(out_channels),
-        nn.SiLU()
+            nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding),
+            nn.BatchNorm2d(out_channels),
+            nn.SiLU()
         )
 
         def forward(self, x):
             x = self.features(x)
 
             return x
-            
+
+
+class BottleNeckBlock(nn.Module):
+    def __init__(self, in_channels, out_channels, kernel_size, stride, padding, shortcut = True):
+        super().__init__()
+
+        self.shortcut = shortcut
+        self.bottleneck = nn.Sequential(
+            ConvolutionalLayer(in_channels, out_channels, kernel_size, stride, padding),
+            ConvolutionalLayer(out_channels, out_channels, kernel_size, stride, padding)
+        )
+        
+        def forward(self, x):
+            input = x
+            x = self.bottleneck(x)
+        
+            if self.shortcut:
+                x = input + x
+
+            return x
+
+
 
 
 
