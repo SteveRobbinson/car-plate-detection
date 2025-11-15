@@ -221,6 +221,29 @@ class BottleNeckBlock(nn.Module):
             return x
 
 
+class SPPF(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super().__init__()
+        output_number = in_channels // 2
+
+        self.initial = ConvolutionalLayer(in_channels, output_number, 1, 1, 0),
+        self.step1 = nn.MaxPool2d(5, 1, 2),
+        self.step2 = nn.MaxPool2d(5, 1, 2),
+        self.step3 = nn.MaxPool2d(5, 1, 2),
+        self.step4 = ConvolutionalLayer(output_number * 4, out_channels, 1, 1, 0)
+
+
+        def forward(self, x):
+            initial = self.initial(x)
+            x1 = self.step1(initial)
+            x2 = self.step2(x1)
+            x3 = self.step3(x2)
+
+            x = torch.cat((initial, x1, x2, x3), 1)
+            x = self.step4(x)
+
+            return x
+
 
 
 
