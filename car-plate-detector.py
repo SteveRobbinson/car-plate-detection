@@ -63,21 +63,47 @@ class SPPF(nn.Module):
 
 
 class C2f(nn.Module):
-    def __init__(self, in_channels, out_channels):
+    def __init__(self, in_channels, out_channels, d):
         super().__init__()
 
+        self.n = 3 * d
         self.initial = ConvolutionalLayer(in_channels, out_channels, 1, 1, 0)
-        self.B1 = BottleNeckBlock(in_channels, out_channels, kernel_size, stride, padding, False)
-        self.B2 = BottleNeckBlock(in_channels, out_channels, kernel_size, stride, padding, False)
-        self.final = ConvolutionalLayer(in_channels, out_channels, 1, 1, 0)
+        c_out = out_channels // 2
 
+        self.BottleBlocks = nn.ModuleList(
+                BottleNeckBlock(c_out, c_out, 3, 1, 1, False)
+                for _ in range(self.n)
+        )
+
+        self.final = ConvolutionalLayer((1/2 * (self.n + 2)), (1/2 * (self.n + 2)), 1, 1, 0)
+    
         def forward(self, x):
+            b_list = []
             initial = self.initial(x)
             x1, x2 = torch.chunk(initial, 2, 1)
-            b1 = self.B1(x2)
-            b2 = self.B2(b1)
 
-            x = torch.cat((x1, b1, b2), 1)
+            for block in self.BottleBlocks:
+                x2 = block(x2)
+                b_list.append(x2)
+
+            x = torch.cat((x1, *b_list), 1)
             final = self.final(x)
         
             return final
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
